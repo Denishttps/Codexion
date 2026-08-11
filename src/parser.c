@@ -3,12 +3,13 @@
 /*                                                        :::      ::::::::   */
 /*   parser.c                                           :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dbobrov <dbobrov@student.42wolfsburg.de>   +#+  +:+       +#+        */
+/*   By: dbobrov <dbobrov@student.42wolfsburg.de    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/08/11 12:00:00 by dbobrov           #+#    #+#             */
-/*   Updated: 2026/08/11 12:00:00 by dbobrov          ###   ########.fr       */
+/*   Updated: 2026/08/12 00:03:51 by dbobrov          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
+
 #include "parser.h"
 
 int	parse_args(int argc, char **argv, t_config *config)
@@ -36,25 +37,26 @@ int	parse_args(int argc, char **argv, t_config *config)
 	return (1);
 }
 
-int	get_argument(const char *arg)
+int get_argument(const char *arg)
 {
-	int	data;
-	int	i;
+    long    n;
+    int     i;
 
-	if (!arg || arg[0] == '\0')
-		return (-1);
-	i = 0;
-	data = 0;
-	while (arg[i])
-	{
-		if (arg[i] < '0' || arg[i] > '9')
-			return (-1);
-		if (data > (INT_MAX - (arg[i] - '0')) / 10)
-			return (-1);
-		data = data * 10 + (arg[i] - '0');
-		i++;
-	}
-	if (data <= 0)
-		return (-1);
-	return (data);
+    if (!arg || !*arg)
+        return (-1);
+
+    n = 0;
+    i = 0;
+    while (arg[i])
+    {
+        if (arg[i] < '0' || arg[i] > '9')
+            return (-1);
+        n = n * 10 + (arg[i] - '0');
+        if (n > INT_MAX)
+            return (-1);
+        i++;
+    }
+    if (n <= 0)
+        return (-1);
+    return ((int)n);
 }

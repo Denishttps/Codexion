@@ -3,12 +3,13 @@
 /*                                                        :::      ::::::::   */
 /*   main.c                                             :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dbobrov <dbobrov@student.42wolfsburg.de>   +#+  +:+       +#+        */
+/*   By: dbobrov <dbobrov@student.42wolfsburg.de    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/08/11 12:00:00 by dbobrov           #+#    #+#             */
-/*   Updated: 2026/08/11 12:00:00 by dbobrov          ###   ########.fr       */
+/*   Updated: 2026/08/11 23:57:47 by dbobrov          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
+
 #include "parser.h"
 #include "simulation.h"
 
