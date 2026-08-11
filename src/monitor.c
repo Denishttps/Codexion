@@ -13,52 +13,79 @@
 #include "simulation.h"
 #include "utils.h"
 
-static int	check_coders(t_simulation *sim)
+static void handle_burnout(t_simulation *sim, int idx, long long now)
 {
-	int			i;
-	long long	now;
-	t_coder		*coder;
-
-	i = 0;
-	now = get_time_ms();
-	while (i < sim->config.coder_count)
-	{
-		coder = &sim->coders[i];
-		if (now >= coder->deadline
-			&& !(coder->left_dongle_taken && coder->right_dongle_taken))
-		{
-			coder->burned_out = 1;
-			sim->stop_simulation = 1;
-			sim->burnout_coder_id = coder->id;
-			log_message(sim, coder->id, "burned out");
-			pthread_cond_broadcast(&sim->state_cond);
-			return (coder->id);
-		}
-		i++;
-	}
-	return (-1);
+    pthread_mutex_lock(&sim->log_mutex);
+    printf("%lld %d burned out\n",
+        now - sim->start_time, sim->coders[idx].id);
+    pthread_mutex_lock(&sim->simulation_mutex);
+    sim->running = false;
+    pthread_mutex_unlock(&sim->simulation_mutex);
+    pthread_mutex_unlock(&sim->log_mutex);
+    wake_dongles(sim);
 }
 
-void	*monitor_thread(void *arg)
+static void check_burnout(t_simulation *sim)
 {
-	t_simulation	*sim;
+    int         i;
+    long long   now;
 
-	sim = (t_simulation *)arg;
-	while (1)
-	{
-		pthread_mutex_lock(&sim->state_mutex);
-		if (sim->stop_simulation)
-		{
-			pthread_mutex_unlock(&sim->state_mutex);
-			return (NULL);
-		}
-		if (check_coders(sim) != -1)
-		{
-			pthread_mutex_unlock(&sim->state_mutex);
-			return (NULL);
-		}
-		pthread_mutex_unlock(&sim->state_mutex);
-		usleep(500);
-	}
-	return (NULL);
+    i = 0;
+    while (i < sim->config.coder_count)
+    {
+        pthread_mutex_lock(&sim->coders[i].mutex);
+        if (sim->coders[i].compile_count >= sim->config.compiles_required)
+        {
+            pthread_mutex_unlock(&sim->coders[i].mutex);
+            i++;
+            continue;
+        }
+        now = get_time_ms();
+        if (now - sim->coders[i].last_compile_start >= sim->config.time_to_burnout)
+        {
+            pthread_mutex_unlock(&sim->coders[i].mutex);
+            handle_burnout(sim, i, now);
+            return;
+        }
+        pthread_mutex_unlock(&sim->coders[i].mutex);
+        i++;
+    }
+}
+
+static void check_all_done(t_simulation *sim)
+{
+    int i;
+
+    i = 0;
+    while (i < sim->config.coder_count)
+    {
+        pthread_mutex_lock(&sim->coders[i].mutex);
+        if (sim->coders[i].compile_count < sim->config.compiles_required)
+        {
+            pthread_mutex_unlock(&sim->coders[i].mutex);
+            return;
+        }
+        pthread_mutex_unlock(&sim->coders[i].mutex);
+        i++;
+    }
+    pthread_mutex_lock(&sim->simulation_mutex);
+    sim->running = false;
+    pthread_mutex_unlock(&sim->simulation_mutex);
+    wake_dongles(sim);
+}
+
+void *monitor_thread(void *arg)
+{
+    t_simulation    *sim;
+
+    sim = (t_simulation *)arg;
+    while (is_running(sim))
+    {
+        check_burnout(sim);
+        if (!is_running(sim))
+            break;
+        check_all_done(sim);
+        usleep(1000);
+    }
+    return (NULL);
 }

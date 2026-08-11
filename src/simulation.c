@@ -15,171 +15,161 @@
 #include "priority_queue.h"
 #include "utils.h"
 
-static void	request_stop(t_simulation *sim)
+void wake_dongles(t_simulation *sim)
 {
-	if (!sim->state_mutex_initialized)
-		return ;
-	pthread_mutex_lock(&sim->state_mutex);
-	sim->stop_simulation = 1;
-	if (sim->state_cond_initialized)
-		pthread_cond_broadcast(&sim->state_cond);
-	pthread_mutex_unlock(&sim->state_mutex);
+    int i;
+
+    i = 0;
+    while (i < sim->config.coder_count)
+    {
+        pthread_mutex_lock(&sim->dongles[i].mutex);
+        pthread_cond_broadcast(&sim->dongles[i].cond);
+        pthread_mutex_unlock(&sim->dongles[i].mutex);
+        i++;
+    }
 }
 
-static int	init_coder(t_simulation *sim, int i)
+static void request_stop(t_simulation *sim)
 {
-	t_coder	*coder;
-
-	coder = &sim->coders[i];
-	coder->id = i + 1;
-	coder->compile_count = 0;
-	coder->burned_out = 0;
-	coder->left_dongle_taken = 0;
-	coder->right_dongle_taken = 0;
-	coder->waiting = 0;
-	coder->heap_index = -1;
-	coder->request_time = 0;
-	coder->last_compile_start = sim->start_time;
-	coder->deadline = sim->start_time + sim->config.time_to_burnout;
-	coder->sim = sim;
-	return (1);
+    pthread_mutex_lock(&sim->simulation_mutex);
+    sim->running = false;
+    pthread_mutex_unlock(&sim->simulation_mutex);
+    wake_dongles(sim);
 }
 
-static int	init_dongles_coders(t_simulation *sim)
+static int init_coder(t_simulation *sim, int i)
 {
-	int			i;
-	t_dongle	*dongle;
+    t_coder *coder;
 
-	i = 0;
-	while (i < sim->config.coder_count)
-	{
-		dongle = &sim->dongles[i];
-		dongle->id = i + 1;
-		dongle->available = 1;
-		dongle->cooldown_until = 0;
-		if (pthread_mutex_init(&dongle->mutex, NULL) != 0)
-			return (0);
-		if (pthread_cond_init(&dongle->cond, NULL) != 0)
-		{
-			pthread_mutex_destroy(&dongle->mutex);
-			return (0);
-		}
-		sim->dongles_initialized++;
-		init_coder(sim, i);
-		i++;
-	}
-	return (1);
+    coder = &sim->coders[i];
+    coder->id = i + 1;
+    coder->compile_count = 0;
+    coder->burned_out = 0;
+    coder->left_idx = i;
+    coder->right_idx = (i + 1) % sim->config.coder_count;
+    coder->left = &sim->dongles[coder->left_idx];
+    coder->right = &sim->dongles[coder->right_idx];
+    coder->last_compile_start = sim->start_time;
+    coder->sim = sim;
+    pthread_mutex_init(&coder->mutex, NULL);
+    return (1);
 }
 
-static int	start_coder_threads(t_simulation *sim)
+static int init_dongles_coders(t_simulation *sim)
 {
-	int	i;
+    int         i;
+    t_dongle    *dongle;
 
-	i = 0;
-	while (i < sim->config.coder_count)
-	{
-		if (pthread_create(&sim->coders[i].thread, NULL,
-				coder_thread, &sim->coders[i]) != 0)
-			return (0);
-		sim->coder_threads_started++;
-		i++;
-	}
-	return (1);
+    i = 0;
+    while (i < sim->config.coder_count)
+    {
+        dongle = &sim->dongles[i];
+        dongle->id = i + 1;
+        dongle->available = true;
+        dongle->last_release_ms = 0;
+        wait_heap_init(&dongle->wait_heap, sim->config.coder_count);
+        pthread_mutex_init(&dongle->mutex, NULL);
+        pthread_cond_init(&dongle->cond, NULL);
+        i++;
+    }
+    i = 0;
+    while (i < sim->config.coder_count)
+    {
+        init_coder(sim, i);
+        i++;
+    }
+    return (1);
 }
 
-static int	init_mutexes(t_simulation *sim)
+static int start_threads(t_simulation *sim)
 {
-	if (pthread_mutex_init(&sim->log_mutex, NULL) != 0)
-		return (0);
-	sim->log_mutex_initialized = 1;
-	if (pthread_mutex_init(&sim->state_mutex, NULL) != 0)
-		return (0);
-	sim->state_mutex_initialized = 1;
-	if (pthread_cond_init(&sim->state_cond, NULL) != 0)
-		return (0);
-	sim->state_cond_initialized = 1;
-	return (1);
+    int i;
+
+    sim->start_time = get_time_ms();
+    i = 0;
+    while (i < sim->config.coder_count)
+    {
+        sim->coders[i].last_compile_start = sim->start_time;
+        i++;
+    }
+    sim->running = true;
+    if (pthread_create(&sim->monitor_thread, NULL, monitor_thread, sim) != 0)
+        return (0);
+    i = 0;
+    while (i < sim->config.coder_count)
+    {
+        if (pthread_create(&sim->coders[i].thread, NULL, coder_thread, &sim->coders[i]) != 0)
+            return (0);
+        i++;
+    }
+    return (1);
 }
 
-void	wait_simulation(t_simulation *sim)
+static int init_mutexes(t_simulation *sim)
 {
-	int	i;
-
-	if (sim->threads_joined)
-		return ;
-	i = 0;
-	while (i < sim->coder_threads_started)
-	{
-		pthread_join(sim->coders[i].thread, NULL);
-		i++;
-	}
-	request_stop(sim);
-	if (sim->monitor_thread_started)
-		pthread_join(sim->monitor_thread, NULL);
-	sim->threads_joined = 1;
+    pthread_mutex_init(&sim->log_mutex, NULL);
+    pthread_mutex_init(&sim->simulation_mutex, NULL);
+    pthread_mutex_init(&sim->counter_mutex, NULL);
+    sim->request_counter = 0;
+    sim->running = false;
+    return (1);
 }
 
-void	destroy_simulation(t_simulation *sim)
+void wait_simulation(t_simulation *sim)
 {
-	int	i;
+    int i;
 
-	if (!sim->threads_joined)
-	{
-		request_stop(sim);
-		wait_simulation(sim);
-	}
-	i = 0;
-	while (i < sim->dongles_initialized)
-	{
-		pthread_mutex_destroy(&sim->dongles[i].mutex);
-		pthread_cond_destroy(&sim->dongles[i].cond);
-		i++;
-	}
-	if (sim->heap_initialized)
-		wait_heap_destroy(&sim->wait_heap);
-	if (sim->state_cond_initialized)
-		pthread_cond_destroy(&sim->state_cond);
-	if (sim->state_mutex_initialized)
-		pthread_mutex_destroy(&sim->state_mutex);
-	if (sim->log_mutex_initialized)
-		pthread_mutex_destroy(&sim->log_mutex);
-	free(sim->coders);
-	free(sim->dongles);
+    pthread_join(sim->monitor_thread, NULL);
+    wake_dongles(sim);
+    i = 0;
+    while (i < sim->config.coder_count)
+    {
+        pthread_join(sim->coders[i].thread, NULL);
+        i++;
+    }
 }
 
-int	init_simulation(t_simulation *sim, const t_config *config)
+void destroy_simulation(t_simulation *sim)
 {
-	memset(sim, 0, sizeof(*sim));
-	sim->config = *config;
-	sim->start_time = get_time_ms();
-	sim->coders = malloc(sizeof(t_coder) * config->coder_count);
-	sim->dongles = malloc(sizeof(t_dongle) * config->coder_count);
-	if (!sim->coders || !sim->dongles)
-	{
-		destroy_simulation(sim);
-		return (0);
-	}
-	if (!init_mutexes(sim))
-	{
-		destroy_simulation(sim);
-		return (0);
-	}
-	if (!wait_heap_init(&sim->wait_heap, config->coder_count))
-	{
-		destroy_simulation(sim);
-		return (0);
-	}
-	sim->heap_initialized = 1;
-	if (!init_dongles_coders(sim) || !start_coder_threads(sim))
-	{
-		destroy_simulation(sim);
-		return (0);
-	}
-	if (pthread_create(&sim->monitor_thread, NULL, monitor_thread, sim) != 0)
-	{
-		destroy_simulation(sim);
-		return (0);
-	}
-	sim->monitor_thread_started = 1;
-	return (1);
+    int i;
+
+    request_stop(sim);
+    i = 0;
+    while (i < sim->config.coder_count)
+    {
+        pthread_mutex_destroy(&sim->dongles[i].mutex);
+        pthread_cond_destroy(&sim->dongles[i].cond);
+        wait_heap_destroy(&sim->dongles[i].wait_heap);
+        pthread_mutex_destroy(&sim->coders[i].mutex);
+        i++;
+    }
+    pthread_mutex_destroy(&sim->simulation_mutex);
+    pthread_mutex_destroy(&sim->counter_mutex);
+    pthread_mutex_destroy(&sim->log_mutex);
+    free(sim->coders);
+    free(sim->dongles);
+}
+
+int init_simulation(t_simulation *sim, const t_config *config)
+{
+    memset(sim, 0, sizeof(*sim));
+    sim->config = *config;
+    sim->coders = malloc(sizeof(t_coder) * config->coder_count);
+    sim->dongles = malloc(sizeof(t_dongle) * config->coder_count);
+    if (!sim->coders || !sim->dongles)
+    {
+        free(sim->coders);
+        free(sim->dongles);
+        return (0);
+    }
+    init_mutexes(sim);
+    init_dongles_coders(sim);
+    if (!start_threads(sim))
+    {
+        request_stop(sim);
+        wait_simulation(sim);
+        destroy_simulation(sim);
+        return (0);
+    }
+    return (1);
 }

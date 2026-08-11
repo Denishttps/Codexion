@@ -12,7 +12,7 @@
 
 #include "priority_queue.h"
 
-int	wait_heap_compare(const t_coder *a, const t_coder *b,
+int wait_heap_compare(const t_request *a, const t_request *b,
 	const t_config *config)
 {
 	if (config->scheduler == SCHEDULER_EDF)
@@ -24,84 +24,66 @@ int	wait_heap_compare(const t_coder *a, const t_coder *b,
 			return (1);
 		}
 	}
-	if (a->request_time != b->request_time)
+	if (a->arrival_order != b->arrival_order)
 	{
-		if (a->request_time < b->request_time)
-			return (-1);
-		return (1);
-	}
-	if (a->id != b->id)
-	{
-		if (a->id < b->id)
+		if (a->arrival_order < b->arrival_order)
 			return (-1);
 		return (1);
 	}
 	return (0);
 }
 
-static int	wants_dongle(const t_coder *coder, int dongle_idx, int count)
+static void swap_nodes(t_wait_heap *heap, int a, int b)
 {
-	int	left;
-	int	right;
-
-	left = coder->id - 1;
-	right = coder->id % count;
-	return (dongle_idx == left || dongle_idx == right);
-}
-
-static void	swap_nodes(t_wait_heap *heap, int a, int b)
-{
-	t_coder	*tmp;
+	t_request tmp;
 
 	tmp = heap->items[a];
 	heap->items[a] = heap->items[b];
 	heap->items[b] = tmp;
-	heap->items[a]->heap_index = a;
-	heap->items[b]->heap_index = b;
 }
 
-static void	heap_up(t_wait_heap *heap, int index, const t_config *config)
+static void heap_up(t_wait_heap *heap, int index, const t_config *config)
 {
-	int	parent;
+	int parent;
 
 	while (index > 0)
 	{
 		parent = (index - 1) / 2;
-		if (wait_heap_compare(heap->items[index], heap->items[parent],
+		if (wait_heap_compare(&heap->items[index], &heap->items[parent],
 				config) >= 0)
-			break ;
+			break;
 		swap_nodes(heap, index, parent);
 		index = parent;
 	}
 }
 
-static void	heap_down(t_wait_heap *heap, int index, const t_config *config)
+static void heap_down(t_wait_heap *heap, int index, const t_config *config)
 {
-	int	left;
-	int	right;
-	int	best;
+	int left;
+	int right;
+	int best;
 
 	while (1)
 	{
 		left = index * 2 + 1;
 		right = index * 2 + 2;
 		best = index;
-		if (left < heap->size && wait_heap_compare(heap->items[left],
-				heap->items[best], config) < 0)
+		if (left < heap->size && wait_heap_compare(&heap->items[left],
+				&heap->items[best], config) < 0)
 			best = left;
-		if (right < heap->size && wait_heap_compare(heap->items[right],
-				heap->items[best], config) < 0)
+		if (right < heap->size && wait_heap_compare(&heap->items[right],
+				&heap->items[best], config) < 0)
 			best = right;
 		if (best == index)
-			break ;
+			break;
 		swap_nodes(heap, index, best);
 		index = best;
 	}
 }
 
-int	wait_heap_init(t_wait_heap *heap, int capacity)
+int wait_heap_init(t_wait_heap *heap, int capacity)
 {
-	heap->items = malloc(sizeof(t_coder *) * capacity);
+	heap->items = malloc(sizeof(t_request) * capacity);
 	if (!heap->items)
 		return (0);
 	heap->size = 0;
@@ -109,7 +91,7 @@ int	wait_heap_init(t_wait_heap *heap, int capacity)
 	return (1);
 }
 
-void	wait_heap_destroy(t_wait_heap *heap)
+void wait_heap_destroy(t_wait_heap *heap)
 {
 	free(heap->items);
 	heap->items = NULL;
@@ -117,52 +99,31 @@ void	wait_heap_destroy(t_wait_heap *heap)
 	heap->capacity = 0;
 }
 
-int	wait_heap_push(t_wait_heap *heap, t_coder *coder, const t_config *config)
+int wait_heap_push(t_wait_heap *heap, t_request req, const t_config *config)
 {
-	if (coder->heap_index != -1)
-		return (1);
 	if (heap->size >= heap->capacity)
 		return (0);
-	heap->items[heap->size] = coder;
-	coder->heap_index = heap->size;
+	heap->items[heap->size] = req;
 	heap->size++;
-	heap_up(heap, coder->heap_index, config);
+	heap_up(heap, heap->size - 1, config);
 	return (1);
 }
 
-void	wait_heap_remove(t_wait_heap *heap, t_coder *coder,
-	const t_config *config)
+t_request wait_heap_pop(t_wait_heap *heap, const t_config *config)
 {
-	int	index;
+	t_request req;
 
-	index = coder->heap_index;
-	if (index < 0 || index >= heap->size)
-		return ;
-	coder->heap_index = -1;
+	req = heap->items[0];
 	heap->size--;
-	if (index == heap->size)
-		return ;
-	heap->items[index] = heap->items[heap->size];
-	heap->items[index]->heap_index = index;
-	heap_up(heap, index, config);
-	heap_down(heap, heap->items[index]->heap_index, config);
+	if (heap->size > 0)
+	{
+		heap->items[0] = heap->items[heap->size];
+		heap_down(heap, 0, config);
+	}
+	return (req);
 }
 
-int	wait_heap_has_higher_for_dongle(t_wait_heap *heap, t_coder *coder,
-	int dongle_idx, int coder_count, const t_config *config)
+t_request wait_heap_peek(t_wait_heap *heap)
 {
-	int		i;
-	t_coder	*other;
-
-	i = 0;
-	while (i < heap->size)
-	{
-		other = heap->items[i];
-		if (other != coder && other->waiting
-			&& wants_dongle(other, dongle_idx, coder_count)
-			&& wait_heap_compare(other, coder, config) < 0)
-			return (1);
-		i++;
-	}
-	return (0);
+	return (heap->items[0]);
 }
