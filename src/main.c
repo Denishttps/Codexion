@@ -3,17 +3,16 @@
 /*                                                        :::      ::::::::   */
 /*   main.c                                             :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dbobrov <dbobrov@student.42wolfsburg.de    +#+  +:+       +#+        */
+/*   By: dbobrov <dbobrov@student.42wolfsburg.de>   +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/08/10 14:30:39 by dbobrov           #+#    #+#             */
-/*   Updated: 2026/08/10 14:30:40 by dbobrov          ###   ########.fr       */
+/*   Created: 2026/08/11 12:00:00 by dbobrov           #+#    #+#             */
+/*   Updated: 2026/08/11 12:00:00 by dbobrov          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
-
 #include "parser.h"
 #include "simulation.h"
 
-static int init_config(int argc, char **argv, t_config *config)
+static int	init_config(int argc, char **argv, t_config *config)
 {
 	memset(config, 0, sizeof(*config));
 	if (!parse_args(argc, argv, config))
@@ -24,7 +23,7 @@ static int init_config(int argc, char **argv, t_config *config)
 	return (1);
 }
 
-int main(int argc, char **argv)
+int	main(int argc, char **argv)
 {
 	t_config		config;
 	t_simulation	sim;

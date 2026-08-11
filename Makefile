@@ -17,10 +17,13 @@ SRCS		= \
 				main.c \
 				parser.c \
 				simulation.c \
+				simulation_init.c \
 				coder.c \
+				coder_utils.c \
 				monitor.c \
 				utils.c \
-				priority_queue.c
+				priority_queue.c \
+				priority_queue_utils.c
 
 OBJS		= $(addprefix $(OBJS_DIR)/,$(SRCS:.c=.o))
 DEPS		= $(OBJS:.o=.d)
