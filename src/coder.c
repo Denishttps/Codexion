@@ -11,224 +11,346 @@
 /* ************************************************************************** */
 
 #include "coder.h"
+#include "priority_queue.h"
 #include "utils.h"
 
-static int get_left_dongle(const t_coder *coder, int count)
+static int	get_left_dongle(const t_coder *coder, int count)
 {
-    (void)count;
-    return (coder->id - 1);
+	(void)count;
+	return (coder->id - 1);
 }
 
-static int get_right_dongle(const t_coder *coder, int count)
+static int	get_right_dongle(const t_coder *coder, int count)
 {
-    return (coder->id % count);
+	return (coder->id % count);
 }
 
-static int compare_priority(const t_coder *a, const t_coder *b,
-    const t_config *config)
+static void	lock_dongle_pair(t_simulation *sim, int left, int right)
 {
-    if (config->scheduler == SCHEDULER_EDF)
-    {
-        if (a->deadline != b->deadline)
-            return (a->deadline < b->deadline ? -1 : 1);
-    }
-    if (a->request_time != b->request_time)
-        return (a->request_time < b->request_time ? -1 : 1);
-    if (a->id != b->id)
-        return (a->id < b->id ? -1 : 1);
-    return (0);
+	if (left == right)
+	{
+		pthread_mutex_lock(&sim->dongles[left].mutex);
+		return ;
+	}
+	if (left < right)
+	{
+		pthread_mutex_lock(&sim->dongles[left].mutex);
+		pthread_mutex_lock(&sim->dongles[right].mutex);
+	}
+	else
+	{
+		pthread_mutex_lock(&sim->dongles[right].mutex);
+		pthread_mutex_lock(&sim->dongles[left].mutex);
+	}
 }
 
-static int wants_dongle(const t_coder *coder, int dongle_idx, int count)
+static void	unlock_dongle_pair(t_simulation *sim, int left, int right)
 {
-    int left = get_left_dongle(coder, count);
-    int right = get_right_dongle(coder, count);
-
-    return (dongle_idx == left || dongle_idx == right);
+	if (left == right)
+	{
+		pthread_mutex_unlock(&sim->dongles[left].mutex);
+		return ;
+	}
+	pthread_mutex_unlock(&sim->dongles[right].mutex);
+	pthread_mutex_unlock(&sim->dongles[left].mutex);
 }
 
-static int is_best_for_dongle(t_simulation *sim, t_coder *coder, int dongle_idx)
+static void	set_abs_time_ms(struct timespec *time, long long ms)
 {
-    int i;
-    int count;
-    t_coder *other;
-
-    count = sim->config->coder_count;
-    i = 0;
-    while (i < count)
-    {
-        other = &sim->coders[i];
-        if (other != coder && other->waiting && wants_dongle(other, dongle_idx, count))
-        {
-            if (compare_priority(other, coder, sim->config) < 0)
-                return (0);
-        }
-        i++;
-    }
-    return (1);
+	time->tv_sec = ms / 1000;
+	time->tv_nsec = (ms % 1000) * 1000000;
 }
 
-static const t_coder *get_global_best_waiting(t_simulation *sim, int left, int right)
+static int	simulation_stopped(t_simulation *sim)
 {
-    int i;
-    int count;
-    const t_coder *best = NULL;
-    const t_coder *current;
+	int	stopped;
 
-    count = sim->config->coder_count;
-    i = 0;
-    while (i < count)
-    {
-        current = &sim->coders[i];
-        if (current->waiting && wants_dongle(current, left, count)
-            && wants_dongle(current, right, count))
-        {
-            if (!best || compare_priority(current, best, sim->config) < 0)
-                best = current;
-        }
-        i++;
-    }
-    return (best);
+	pthread_mutex_lock(&sim->state_mutex);
+	stopped = sim->stop_simulation;
+	pthread_mutex_unlock(&sim->state_mutex);
+	return (stopped);
 }
 
-static void lock_dongle_pair(t_simulation *sim, int left, int right)
+static void	sleep_ms_interruptible(t_simulation *sim, int ms)
 {
-    if (left == right)
-    {
-        pthread_mutex_lock(&sim->dongles[left].mutex);
-        return;
-    }
-    if (left < right)
-    {
-        pthread_mutex_lock(&sim->dongles[left].mutex);
-        pthread_mutex_lock(&sim->dongles[right].mutex);
-    }
-    else
-    {
-        pthread_mutex_lock(&sim->dongles[right].mutex);
-        pthread_mutex_lock(&sim->dongles[left].mutex);
-    }
+	long long	end;
+	long long	now;
+	int			chunk;
+
+	end = get_time_ms() + ms;
+	while (!simulation_stopped(sim))
+	{
+		now = get_time_ms();
+		if (now >= end)
+			break ;
+		chunk = (int)(end - now);
+		if (chunk > 1)
+			chunk = 1;
+		usleep(chunk * 1000);
+	}
 }
 
-static void unlock_dongle_pair(t_simulation *sim, int left, int right)
+static int	dongles_ready(t_simulation *sim, int left, int right, long long now)
 {
-    if (left == right)
-    {
-        pthread_mutex_unlock(&sim->dongles[left].mutex);
-        return;
-    }
-    pthread_mutex_unlock(&sim->dongles[right].mutex);
-    pthread_mutex_unlock(&sim->dongles[left].mutex);
+	int	ready;
+
+	lock_dongle_pair(sim, left, right);
+	ready = (sim->dongles[left].available
+			&& sim->dongles[left].cooldown_until <= now
+			&& sim->dongles[right].available
+			&& sim->dongles[right].cooldown_until <= now);
+	unlock_dongle_pair(sim, left, right);
+	return (ready);
 }
 
-int take_two_dongles(t_coder *coder, t_simulation *sim)
+static long long	next_cooldown_wakeup(t_simulation *sim, int left, int right,
+	long long now)
 {
-    int left;
-    int right;
-    long long now;
-    const t_coder *best;
+	long long	wakeup;
 
-    left = get_left_dongle(coder, sim->config->coder_count);
-    right = get_right_dongle(coder, sim->config->coder_count);
-    pthread_mutex_lock(&sim->state_mutex);
-    coder->waiting = 1;
-    coder->request_time = get_time_ms();
-    while (!sim->stop_simulation)
-    {
-        now = get_time_ms();
-        if (sim->dongles[left].available
-            && sim->dongles[left].cooldown_until <= now
-            && sim->dongles[right].available
-            && sim->dongles[right].cooldown_until <= now)
-        {
-            if (is_best_for_dongle(sim, coder, left)
-                && is_best_for_dongle(sim, coder, right))
-            {
-                lock_dongle_pair(sim, left, right);
-                sim->dongles[left].available = 0;
-                sim->dongles[right].available = 0;
-                unlock_dongle_pair(sim, left, right);
-                coder->left_dongle_taken = 1;
-                coder->right_dongle_taken = 1;
-                coder->waiting = 0;
-                pthread_mutex_unlock(&sim->state_mutex);
-                return (1);
-            }
-            best = get_global_best_waiting(sim, left, right);
-            if (best == coder)
-            {
-                lock_dongle_pair(sim, left, right);
-                sim->dongles[left].available = 0;
-                sim->dongles[right].available = 0;
-                unlock_dongle_pair(sim, left, right);
-                coder->left_dongle_taken = 1;
-                coder->right_dongle_taken = 1;
-                coder->waiting = 0;
-                pthread_mutex_unlock(&sim->state_mutex);
-                return (1);
-            }
-        }
-        pthread_cond_wait(&sim->state_cond, &sim->state_mutex);
-    }
-    coder->waiting = 0;
-    pthread_mutex_unlock(&sim->state_mutex);
-    return (0);
+	wakeup = 0;
+	lock_dongle_pair(sim, left, right);
+	if (sim->dongles[left].available && sim->dongles[left].cooldown_until > now)
+		wakeup = sim->dongles[left].cooldown_until;
+	if (sim->dongles[right].available
+		&& sim->dongles[right].cooldown_until > now
+		&& sim->dongles[right].cooldown_until > wakeup)
+		wakeup = sim->dongles[right].cooldown_until;
+	unlock_dongle_pair(sim, left, right);
+	return (wakeup);
 }
 
-void release_two_dongles(t_coder *coder, t_simulation *sim)
+static int	coder_pair_ready(t_simulation *sim, t_coder *coder, long long now)
 {
-    int left;
-    int right;
-    long long now;
+	int	left;
+	int	right;
 
-    left = get_left_dongle(coder, sim->config->coder_count);
-    right = get_right_dongle(coder, sim->config->coder_count);
-    now = get_time_ms();
-
-    pthread_mutex_lock(&sim->state_mutex);
-    lock_dongle_pair(sim, left, right);
-    sim->dongles[left].available = 1;
-    sim->dongles[left].cooldown_until = now + sim->config->dongle_cooldown;
-    sim->dongles[right].available = 1;
-    sim->dongles[right].cooldown_until = now + sim->config->dongle_cooldown;
-    unlock_dongle_pair(sim, left, right);
-    coder->left_dongle_taken = 0;
-    coder->right_dongle_taken = 0;
-    pthread_cond_broadcast(&sim->state_cond);
-    pthread_mutex_unlock(&sim->state_mutex);
+	left = get_left_dongle(coder, sim->config.coder_count);
+	right = get_right_dongle(coder, sim->config.coder_count);
+	return (dongles_ready(sim, left, right, now));
 }
 
-void *coder_thread(void *arg)
+static int	coder_pairs_conflict(t_simulation *sim, t_coder *a, t_coder *b)
 {
-    t_coder *coder = arg;
-    t_simulation *sim = coder->sim;
-    const t_config *config = sim->config;
+	int	a_left;
+	int	a_right;
+	int	b_left;
+	int	b_right;
 
-    while (!sim->stop_simulation && coder->compile_count < config->compiles_required)
-    {
-        if (!take_two_dongles(coder, sim))
-            break;
+	a_left = get_left_dongle(a, sim->config.coder_count);
+	a_right = get_right_dongle(a, sim->config.coder_count);
+	b_left = get_left_dongle(b, sim->config.coder_count);
+	b_right = get_right_dongle(b, sim->config.coder_count);
+	return (a_left == b_left || a_left == b_right
+		|| a_right == b_left || a_right == b_right);
+}
 
-        coder->last_compile_start = get_time_ms();
-        coder->deadline = coder->last_compile_start + config->time_to_burnout;
+static int	higher_priority_can_run(t_coder *coder, t_simulation *sim,
+	long long now)
+{
+	int		i;
+	t_coder	*other;
 
-        log_message(sim, coder->id, "has taken a dongle");
-        log_message(sim, coder->id, "has taken a dongle");
-        log_message(sim, coder->id, "is compiling");
+	i = 0;
+	while (i < sim->wait_heap.size)
+	{
+		other = sim->wait_heap.items[i];
+		if (other != coder && other->waiting
+			&& coder_pairs_conflict(sim, other, coder)
+			&& wait_heap_compare(other, coder, &sim->config) < 0
+			&& coder_pair_ready(sim, other, now))
+			return (1);
+		i++;
+	}
+	return (0);
+}
 
-        usleep(config->time_to_compile * 1000);
-        coder->compile_count++;
+int	take_two_dongles(t_coder *coder, t_simulation *sim)
+{
+	int				left;
+	int				right;
+	long long		now;
+	long long		wakeup;
+	struct timespec	time;
 
-        release_two_dongles(coder, sim);
+	left = get_left_dongle(coder, sim->config.coder_count);
+	right = get_right_dongle(coder, sim->config.coder_count);
+	pthread_mutex_lock(&sim->state_mutex);
+	coder->waiting = 1;
+	coder->request_time = get_time_ms();
+	if (!wait_heap_push(&sim->wait_heap, coder, &sim->config))
+		sim->stop_simulation = 1;
+	while (!sim->stop_simulation)
+	{
+		now = get_time_ms();
+		if (dongles_ready(sim, left, right, now)
+			&& !higher_priority_can_run(coder, sim, now))
+		{
+			lock_dongle_pair(sim, left, right);
+			sim->dongles[left].available = 0;
+			sim->dongles[right].available = 0;
+			unlock_dongle_pair(sim, left, right);
+			wait_heap_remove(&sim->wait_heap, coder, &sim->config);
+			coder->left_dongle_taken = 1;
+			coder->right_dongle_taken = 1;
+			coder->waiting = 0;
+			pthread_cond_broadcast(&sim->state_cond);
+			pthread_mutex_unlock(&sim->state_mutex);
+			return (1);
+		}
+		wakeup = next_cooldown_wakeup(sim, left, right, now);
+		if (wakeup > now)
+		{
+			set_abs_time_ms(&time, wakeup);
+			pthread_cond_timedwait(&sim->state_cond, &sim->state_mutex,
+				&time);
+		}
+		else
+			pthread_cond_wait(&sim->state_cond, &sim->state_mutex);
+	}
+	wait_heap_remove(&sim->wait_heap, coder, &sim->config);
+	coder->waiting = 0;
+	pthread_mutex_unlock(&sim->state_mutex);
+	return (0);
+}
 
-        if (coder->compile_count >= config->compiles_required)
-            break;
+void	release_two_dongles(t_coder *coder, t_simulation *sim)
+{
+	int			left;
+	int			right;
+	long long	now;
 
-        log_message(sim, coder->id, "is debugging");
-        usleep(config->time_to_debug * 1000);
+	left = get_left_dongle(coder, sim->config.coder_count);
+	right = get_right_dongle(coder, sim->config.coder_count);
+	now = get_time_ms();
+	pthread_mutex_lock(&sim->state_mutex);
+	lock_dongle_pair(sim, left, right);
+	sim->dongles[left].available = 1;
+	sim->dongles[left].cooldown_until = now + sim->config.dongle_cooldown;
+	sim->dongles[right].available = 1;
+	sim->dongles[right].cooldown_until = now + sim->config.dongle_cooldown;
+	unlock_dongle_pair(sim, left, right);
+	coder->left_dongle_taken = 0;
+	coder->right_dongle_taken = 0;
+	pthread_cond_broadcast(&sim->state_cond);
+	pthread_mutex_unlock(&sim->state_mutex);
+}
 
-        log_message(sim, coder->id, "is refactoring");
-        usleep(config->time_to_refactor * 1000);
-    }
-    return (NULL);
+static void	start_compile(t_coder *coder, t_simulation *sim)
+{
+	pthread_mutex_lock(&sim->state_mutex);
+	coder->last_compile_start = get_time_ms();
+	coder->deadline = coder->last_compile_start + sim->config.time_to_burnout;
+	pthread_mutex_unlock(&sim->state_mutex);
+}
+
+static int	finish_compile(t_coder *coder, t_simulation *sim)
+{
+	int	keep_working;
+
+	pthread_mutex_lock(&sim->state_mutex);
+	coder->compile_count++;
+	if (coder->compile_count == sim->config.compiles_required)
+	{
+		sim->completed_coders++;
+		if (sim->completed_coders == sim->config.coder_count)
+		{
+			sim->stop_simulation = 1;
+			pthread_cond_broadcast(&sim->state_cond);
+		}
+	}
+	keep_working = (!sim->stop_simulation
+			&& coder->compile_count < sim->config.compiles_required);
+	pthread_mutex_unlock(&sim->state_mutex);
+	return (keep_working);
+}
+
+static int	coder_should_continue(t_coder *coder, t_simulation *sim)
+{
+	int	keep_working;
+
+	pthread_mutex_lock(&sim->state_mutex);
+	keep_working = (!sim->stop_simulation
+			&& coder->compile_count < sim->config.compiles_required);
+	pthread_mutex_unlock(&sim->state_mutex);
+	return (keep_working);
+}
+
+static int	take_only_dongle(t_coder *coder, t_simulation *sim)
+{
+	int	left;
+
+	left = get_left_dongle(coder, sim->config.coder_count);
+	pthread_mutex_lock(&sim->state_mutex);
+	while (!sim->stop_simulation)
+	{
+		if (dongles_ready(sim, left, left, get_time_ms()))
+		{
+			lock_dongle_pair(sim, left, left);
+			sim->dongles[left].available = 0;
+			unlock_dongle_pair(sim, left, left);
+			coder->left_dongle_taken = 1;
+			coder->right_dongle_taken = 0;
+			pthread_cond_broadcast(&sim->state_cond);
+			pthread_mutex_unlock(&sim->state_mutex);
+			return (1);
+		}
+		pthread_cond_wait(&sim->state_cond, &sim->state_mutex);
+	}
+	pthread_mutex_unlock(&sim->state_mutex);
+	return (0);
+}
+
+static void	handle_single_coder(t_coder *coder, t_simulation *sim)
+{
+	if (!take_only_dongle(coder, sim))
+		return ;
+	log_message(sim, coder->id, "has taken a dongle");
+	while (!simulation_stopped(sim))
+		usleep(1000);
+	release_two_dongles(coder, sim);
+}
+
+void	*coder_thread(void *arg)
+{
+	t_coder			*coder;
+	t_simulation	*sim;
+
+	coder = arg;
+	sim = coder->sim;
+	if (sim->config.coder_count == 1)
+	{
+		handle_single_coder(coder, sim);
+		return (NULL);
+	}
+	while (coder_should_continue(coder, sim))
+	{
+		if (!take_two_dongles(coder, sim))
+			break ;
+		start_compile(coder, sim);
+		log_message(sim, coder->id, "has taken a dongle");
+		log_message(sim, coder->id, "has taken a dongle");
+		log_message(sim, coder->id, "is compiling");
+		sleep_ms_interruptible(sim, sim->config.time_to_compile);
+		if (simulation_stopped(sim))
+		{
+			release_two_dongles(coder, sim);
+			break ;
+		}
+		if (!finish_compile(coder, sim))
+		{
+			release_two_dongles(coder, sim);
+			break ;
+		}
+		release_two_dongles(coder, sim);
+		if (simulation_stopped(sim))
+			break ;
+		log_message(sim, coder->id, "is debugging");
+		sleep_ms_interruptible(sim, sim->config.time_to_debug);
+		if (simulation_stopped(sim))
+			break ;
+		log_message(sim, coder->id, "is refactoring");
+		sleep_ms_interruptible(sim, sim->config.time_to_refactor);
+	}
+	return (NULL);
 }

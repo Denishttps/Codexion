@@ -4,7 +4,7 @@ CC = cc
 CFLAGS = -Wall -Wextra -Werror -pthread -Iincludes
 SRCS_DIR = src
 
-SRCS = main.c parser.c simulation.c coder.c monitor.c utils.c
+SRCS = main.c parser.c simulation.c coder.c monitor.c utils.c priority_queue.c
 SRCS := $(addprefix $(SRCS_DIR)/, $(SRCS))
 OBJS = $(SRCS:.c=.o)
 

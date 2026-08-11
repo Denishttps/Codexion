@@ -8,32 +8,43 @@
 #include <sys/time.h>
 #include <time.h>
 #include <string.h>
+#include <limits.h>
 
 
 typedef struct s_simulation t_simulation;
 
 typedef struct s_coder
 {
-    int				id;
-    int				compile_count;
-    int				burned_out;
+	    int				id;
+	    int				compile_count;
+	    int				burned_out;
     long long		last_compile_start;
     long long		deadline;
     long long		request_time;
     int				left_dongle_taken;
-    int				right_dongle_taken;
-    int				waiting;
-    pthread_t		thread;
-    t_simulation	*sim;
+	    int				right_dongle_taken;
+	    int				waiting;
+	    int				heap_index;
+	    pthread_t		thread;
+	    t_simulation	*sim;
 } t_coder;
+
+typedef struct s_wait_heap
+{
+	t_coder	**items;
+	int		size;
+	int		capacity;
+}	t_wait_heap;
 
 typedef struct s_dongle
 {
-    int				id;
-    int				available;
-    long long		cooldown_until;
-    pthread_mutex_t	mutex;
-    pthread_cond_t	cond;
+	    int				id;
+	    int				available;
+	    long long		cooldown_until;
+	    t_wait_heap		wait_heap;
+	    int				wait_heap_initialized;
+	    pthread_mutex_t	mutex;
+	    pthread_cond_t	cond;
 } t_dongle;
 
 typedef enum e_scheduler
@@ -56,18 +67,26 @@ typedef struct s_config
 
 typedef struct s_simulation
 {
-    t_coder			*coders;
-    t_dongle		*dongles;
-	t_config		*config;
+	    t_coder			*coders;
+	    t_dongle		*dongles;
+		t_config		config;
+		
+		pthread_t		monitor_thread;
+	    pthread_mutex_t	log_mutex;
+	    pthread_mutex_t	state_mutex;
+	    pthread_cond_t	state_cond;
 	
-	pthread_t		monitor_thread;
-    pthread_mutex_t	log_mutex;
-    pthread_mutex_t	state_mutex;
-    pthread_cond_t	state_cond;
-	
-	long long		start_time;
-    int				stop_simulation;
-    int				burnout_coder_id;
+		long long		start_time;
+	    int				stop_simulation;
+	    int				burnout_coder_id;
+		int				completed_coders;
+		int				dongles_initialized;
+		int				coder_threads_started;
+		int				monitor_thread_started;
+		int				log_mutex_initialized;
+		int				state_mutex_initialized;
+		int				state_cond_initialized;
+		int				threads_joined;
 }   t_simulation;
 
 

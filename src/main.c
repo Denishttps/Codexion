@@ -36,7 +36,7 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Failed to initialize simulation\n");
 		return (1);
 	}
-	// printf("%d\n", sim.config.coder_count);
+	wait_simulation(&sim);
 	destroy_simulation(&sim);
 	return (0);
 }

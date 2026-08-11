@@ -49,18 +49,22 @@ int get_argument(const char *arg)
 {
 	int data;
 	int i;
+	int digit;
 
 	if (!arg || arg[0] == '\0')
 		return (-1);
 	i = 0;
+	data = 0;
 	while (arg[i])
 	{
 		if (arg[i] < '0' || arg[i] > '9')
 			return (-1);
+		digit = arg[i] - '0';
+		if (data > (INT_MAX - digit) / 10)
+			return (-1);
+		data = data * 10 + digit;
 		i++;
 	}
-
-	data = atoi(arg);
 	if (data <= 0)
 		return (-1);
 
