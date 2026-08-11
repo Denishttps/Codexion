@@ -1,11 +1,11 @@
 NAME = codexion
 
 CC = cc
-CFLAGS = -Wall -Wextra -Werror -pthread
-
+CFLAGS = -Wall -Wextra -Werror -pthread -Iincludes
 SRCS_DIR = src
 
-SRCS = codexion.c parser.c simulation.c
+SRCS = main.c parser.c simulation.c coder.c monitor.c utils.c
+SRCS := $(addprefix $(SRCS_DIR)/, $(SRCS))
 OBJS = $(SRCS:.c=.o)
 
 all: $(NAME)

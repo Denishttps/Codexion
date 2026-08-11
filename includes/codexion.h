@@ -23,7 +23,7 @@ typedef struct s_coder
     int				left_dongle_taken;
     int				right_dongle_taken;
     int				waiting;
-    pthread_t	thread;
+    pthread_t		thread;
     t_simulation	*sim;
 } t_coder;
 

@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 #include "coder.h"
+#include "utils.h"
 
 static int get_left_dongle(const t_coder *coder, int count)
 {
@@ -67,8 +68,7 @@ static int is_best_for_dongle(t_simulation *sim, t_coder *coder, int dongle_idx)
     return (1);
 }
 
-static const t_coder *get_global_best_waiting(t_simulation *sim, int left,
-    int right)
+static const t_coder *get_global_best_waiting(t_simulation *sim, int left, int right)
 {
     int i;
     int count;
@@ -119,16 +119,6 @@ static void unlock_dongle_pair(t_simulation *sim, int left, int right)
     }
     pthread_mutex_unlock(&sim->dongles[right].mutex);
     pthread_mutex_unlock(&sim->dongles[left].mutex);
-}
-
-void log_message(t_simulation *sim, int coder_id, const char *msg)
-{
-    long long timestamp;
-
-    timestamp = get_time_ms() - sim->start_time;
-    pthread_mutex_lock(&sim->log_mutex);
-    printf("%lld %d %s\n", timestamp, coder_id, msg);
-    pthread_mutex_unlock(&sim->log_mutex);
 }
 
 int take_two_dongles(t_coder *coder, t_simulation *sim)
