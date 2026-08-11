@@ -3,6 +3,8 @@ NAME = codexion
 CC = cc
 CFLAGS = -Wall -Wextra -Werror -pthread
 
+SRCS_DIR = src
+
 SRCS = codexion.c parser.c simulation.c
 OBJS = $(SRCS:.c=.o)
 

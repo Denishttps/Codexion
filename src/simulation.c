@@ -6,20 +6,13 @@
 /*   By: dbobrov <dbobrov@student.42wolfsburg.de    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/08/10 14:30:09 by dbobrov           #+#    #+#             */
-/*   Updated: 2026/08/10 16:42:30 by dbobrov          ###   ########.fr       */
+/*   Updated: 2026/08/11 18:11:49 by dbobrov          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "simulation.h"
 #include "coder.h"
 #include "utils.h"
-
-void *monitor_thread(void *arg)
-{
-	t_simulation *sim = arg;
-	(void)sim;
-	return (NULL);
-}
 
 static int init_dongles_coders(t_simulation *sim, const t_config *config)
 {
