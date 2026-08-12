@@ -3,12 +3,13 @@
 /*                                                        :::      ::::::::   */
 /*   priority_queue.c                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dbobrov <dbobrov@student.42wolfsburg.de>   +#+  +:+       +#+        */
+/*   By: dbobrov <dbobrov@student.42wolfsburg.de    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/08/11 12:00:00 by dbobrov           #+#    #+#             */
-/*   Updated: 2026/08/11 12:00:00 by dbobrov          ###   ########.fr       */
+/*   Updated: 2026/08/12 12:18:27 by dbobrov          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
+
 #include "priority_queue.h"
 
 int	wait_heap_init(t_wait_heap *heap, int capacity)

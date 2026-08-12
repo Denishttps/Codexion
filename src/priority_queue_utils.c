@@ -3,12 +3,13 @@
 /*                                                        :::      ::::::::   */
 /*   priority_queue_utils.c                             :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dbobrov <dbobrov@student.42wolfsburg.de>   +#+  +:+       +#+        */
+/*   By: dbobrov <dbobrov@student.42wolfsburg.de    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/08/11 12:00:00 by dbobrov           #+#    #+#             */
-/*   Updated: 2026/08/11 12:00:00 by dbobrov          ###   ########.fr       */
+/*   Updated: 2026/08/12 12:18:23 by dbobrov          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
+
 #include "priority_queue.h"
 
 int	wait_heap_compare(const t_request *a, const t_request *b,
