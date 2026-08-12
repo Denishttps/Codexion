@@ -6,7 +6,7 @@
 /*   By: dbobrov <dbobrov@student.42wolfsburg.de    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/08/11 12:00:00 by dbobrov           #+#    #+#             */
-/*   Updated: 2026/08/12 00:03:51 by dbobrov          ###   ########.fr       */
+/*   Updated: 2026/08/12 15:27:27 by dbobrov          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -37,26 +37,25 @@ int	parse_args(int argc, char **argv, t_config *config)
 	return (1);
 }
 
-int get_argument(const char *arg)
+int	get_argument(const char *arg)
 {
-    long    n;
-    int     i;
+	long	n;
+	int		i;
 
-    if (!arg || !*arg)
-        return (-1);
-
-    n = 0;
-    i = 0;
-    while (arg[i])
-    {
-        if (arg[i] < '0' || arg[i] > '9')
-            return (-1);
-        n = n * 10 + (arg[i] - '0');
-        if (n > INT_MAX)
-            return (-1);
-        i++;
-    }
-    if (n <= 0)
-        return (-1);
-    return ((int)n);
+	if (!arg || !*arg)
+		return (-1);
+	n = 0;
+	i = 0;
+	while (arg[i])
+	{
+		if (arg[i] < '0' || arg[i] > '9')
+			return (-1);
+		n = n * 10 + (arg[i] - '0');
+		if (n > INT_MAX)
+			return (-1);
+		i++;
+	}
+	if (n <= 0)
+		return (-1);
+	return ((int)n);
 }
