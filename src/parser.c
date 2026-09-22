@@ -6,7 +6,7 @@
 /*   By: dbobrov <dbobrov@student.42wolfsburg.de    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/08/11 12:00:00 by dbobrov           #+#    #+#             */
-/*   Updated: 2026/08/12 15:27:27 by dbobrov          ###   ########.fr       */
+/*   Updated: 2026/09/22 12:27:42 by dbobrov          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -25,8 +25,9 @@ int	parse_args(int argc, char **argv, t_config *config)
 	config->dongle_cooldown = get_argument(argv[7]);
 	if (config->coder_count < 0 || config->time_to_burnout < 0
 		|| config->time_to_compile < 0 || config->time_to_debug < 0
-		|| config->time_to_refactor < 0 || config->compiles_required < 0
-		|| config->dongle_cooldown < 0)
+		|| config->time_to_refactor < 0 || config->compiles_required < 0)
+		return (0);
+	if (config->dongle_cooldown < 0)
 		return (0);
 	if (strcmp(argv[8], "fifo") == 0)
 		config->scheduler = SCHEDULER_FIFO;
@@ -55,7 +56,5 @@ int	get_argument(const char *arg)
 			return (-1);
 		i++;
 	}
-	if (n <= 0)
-		return (-1);
 	return ((int)n);
 }
