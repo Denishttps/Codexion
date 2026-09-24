@@ -6,7 +6,7 @@
 /*   By: dbobrov <dbobrov@student.42wolfsburg.de    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/08/11 12:00:00 by dbobrov           #+#    #+#             */
-/*   Updated: 2026/08/12 12:18:27 by dbobrov          ###   ########.fr       */
+/*   Updated: 2026/09/24 17:18:59 by dbobrov          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -37,6 +37,26 @@ int	wait_heap_push(t_wait_heap *heap, t_request req, const t_config *config)
 	heap->items[heap->size] = req;
 	heap->size++;
 	heap_up(heap, heap->size - 1, config);
+	return (1);
+}
+
+int	wait_heap_remove(t_wait_heap *heap, int coder_id,
+	const t_config *config)
+{
+	int	index;
+
+	index = 0;
+	while (index < heap->size && heap->items[index].coder_id != coder_id)
+		index++;
+	if (index == heap->size)
+		return (0);
+	heap->size--;
+	if (index < heap->size)
+	{
+		heap->items[index] = heap->items[heap->size];
+		heap_up(heap, index, config);
+		heap_down(heap, index, config);
+	}
 	return (1);
 }
 

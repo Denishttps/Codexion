@@ -99,6 +99,9 @@ typedef struct s_simulation
 	long long				request_counter;
 	pthread_mutex_t			counter_mutex;
 
+	pthread_mutex_t		pair_mutex;
+	pthread_cond_t		pair_cond;
+	t_wait_heap			pair_heap;
 	int						burnout_coder_id;
 }							t_simulation;
 

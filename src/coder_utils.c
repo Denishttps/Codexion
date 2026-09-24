@@ -6,7 +6,7 @@
 /*   By: dbobrov <dbobrov@student.42wolfsburg.de    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/08/11 12:00:00 by dbobrov           #+#    #+#             */
-/*   Updated: 2026/08/12 12:17:58 by dbobrov          ###   ########.fr       */
+/*   Updated: 2026/09/24 17:25:25 by dbobrov          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -39,7 +39,6 @@ int	cooldown_ok(t_dongle *dongle, t_simulation *sim)
 
 void	wait_cooldown(t_dongle *dongle, t_simulation *sim)
 {
-	struct timeval	tv;
 	struct timespec	ts;
 	long long		elapsed;
 	long long		remaining;
@@ -48,9 +47,14 @@ void	wait_cooldown(t_dongle *dongle, t_simulation *sim)
 	if (elapsed >= sim->config.dongle_cooldown)
 		return ;
 	remaining = sim->config.dongle_cooldown - elapsed;
-	gettimeofday(&tv, NULL);
-	ts.tv_sec = tv.tv_sec + (tv.tv_usec / 1000 + remaining) / 1000;
-	ts.tv_nsec = ((tv.tv_usec / 1000 + remaining) % 1000) * 1000000;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	ts.tv_sec += remaining / 1000;
+	ts.tv_nsec += (remaining % 1000) * 1000000;
+	if (ts.tv_nsec >= 1000000000L)
+	{
+		ts.tv_sec++;
+		ts.tv_nsec -= 1000000000L;
+	}
 	pthread_cond_timedwait(&dongle->cond, &dongle->mutex, &ts);
 }
 
@@ -83,11 +87,92 @@ void	acquire_dongle(t_coder *coder, t_simulation *sim, t_dongle *dongle)
 	pthread_mutex_unlock(&dongle->mutex);
 }
 
-void	release_dongle(t_dongle *dongle)
+static void	cancel_pair_request(t_coder *coder, t_simulation *sim)
 {
+	wait_heap_remove(&sim->pair_heap, coder->id, &sim->config);
+	pthread_cond_broadcast(&sim->pair_cond);
+}
+
+static int	best_grantable_coder(t_coder *coder, t_simulation *sim)
+{
+	t_request	current;
+	t_request	best;
+	t_coder		*current_coder;
+	int			i;
+	int			found;
+
+	i = 0;
+	found = 0;
+	while (i < sim->pair_heap.size)
+	{
+		current = sim->pair_heap.items[i];
+		current_coder = &sim->coders[current.coder_id - 1];
+		if (current_coder->left->available && current_coder->right->available
+			&& cooldown_ok(current_coder->left, sim)
+			&& cooldown_ok(current_coder->right, sim)
+			&& (!found || wait_heap_compare(&current, &best,
+					&sim->config) < 0))
+		{
+			best = current;
+			found = 1;
+		}
+		i++;
+	}
+	if (!found)
+		return (0);
+	return (best.coder_id == coder->id);
+}
+
+int	take_two_dongles(t_coder *coder, t_simulation *sim)
+{
+	t_request	req;
+	int			ready;
+
+	pthread_mutex_lock(&coder->mutex);
+	req.coder_id = coder->id;
+	req.deadline = coder->last_compile_start + sim->config.time_to_burnout;
+	pthread_mutex_unlock(&coder->mutex);
+	pthread_mutex_lock(&sim->counter_mutex);
+	req.arrival_order = sim->request_counter++;
+	pthread_mutex_unlock(&sim->counter_mutex);
+	pthread_mutex_lock(&sim->pair_mutex);
+	ready = wait_heap_push(&sim->pair_heap, req, &sim->config);
+	if (!ready)
+	{
+		pthread_mutex_unlock(&sim->pair_mutex);
+		return (0);
+	}
+	while (is_running(sim))
+	{
+		ready = best_grantable_coder(coder, sim);
+		if (ready)
+		{
+			wait_heap_remove(&sim->pair_heap, coder->id, &sim->config);
+			coder->left->available = false;
+			coder->right->available = false;
+		}
+		if (ready)
+		{
+			pthread_mutex_unlock(&sim->pair_mutex);
+			return (1);
+		}
+		pthread_mutex_unlock(&sim->pair_mutex);
+		usleep(1000);
+		pthread_mutex_lock(&sim->pair_mutex);
+	}
+	cancel_pair_request(coder, sim);
+	pthread_mutex_unlock(&sim->pair_mutex);
+	return (0);
+}
+
+void	release_dongle(t_dongle *dongle, t_simulation *sim)
+{
+	pthread_mutex_lock(&sim->pair_mutex);
 	pthread_mutex_lock(&dongle->mutex);
 	dongle->available = true;
 	dongle->last_release_ms = get_time_ms();
 	pthread_cond_broadcast(&dongle->cond);
 	pthread_mutex_unlock(&dongle->mutex);
+	pthread_cond_broadcast(&sim->pair_cond);
+	pthread_mutex_unlock(&sim->pair_mutex);
 }

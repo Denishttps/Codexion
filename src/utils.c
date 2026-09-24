@@ -6,7 +6,7 @@
 /*   By: dbobrov <dbobrov@student.42wolfsburg.de    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/08/11 12:00:00 by dbobrov           #+#    #+#             */
-/*   Updated: 2026/08/12 12:18:39 by dbobrov          ###   ########.fr       */
+/*   Updated: 2026/09/24 17:21:26 by dbobrov          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,10 +14,10 @@
 
 long long	get_time_ms(void)
 {
-	struct timeval	tv;
+	struct timespec	ts;
 
-	gettimeofday(&tv, NULL);
-	return ((tv.tv_sec * 1000LL) + (tv.tv_usec / 1000LL));
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return ((ts.tv_sec * 1000LL) + (ts.tv_nsec / 1000000LL));
 }
 
 bool	is_running(t_simulation *sim)

@@ -6,7 +6,7 @@
 /*   By: dbobrov <dbobrov@student.42wolfsburg.de    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/08/11 12:00:00 by dbobrov           #+#    #+#             */
-/*   Updated: 2026/08/12 12:18:34 by dbobrov          ###   ########.fr       */
+/*   Updated: 2026/09/24 17:24:13 by dbobrov          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -35,6 +35,9 @@ void	request_stop(t_simulation *sim)
 	sim->running = false;
 	pthread_mutex_unlock(&sim->simulation_mutex);
 	wake_dongles(sim);
+	pthread_mutex_lock(&sim->pair_mutex);
+	pthread_cond_broadcast(&sim->pair_cond);
+	pthread_mutex_unlock(&sim->pair_mutex);
 }
 
 void	wait_simulation(t_simulation *sim)
@@ -67,6 +70,9 @@ void	destroy_simulation(t_simulation *sim)
 	}
 	pthread_mutex_destroy(&sim->simulation_mutex);
 	pthread_mutex_destroy(&sim->counter_mutex);
+	pthread_mutex_destroy(&sim->pair_mutex);
+	pthread_cond_destroy(&sim->pair_cond);
+	wait_heap_destroy(&sim->pair_heap);
 	pthread_mutex_destroy(&sim->log_mutex);
 	free(sim->coders);
 	free(sim->dongles);
