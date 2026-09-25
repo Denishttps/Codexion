@@ -6,7 +6,7 @@
 /*   By: dbobrov <dbobrov@student.42wolfsburg.de    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/08/11 12:00:00 by dbobrov           #+#    #+#             */
-/*   Updated: 2026/08/12 12:18:11 by dbobrov          ###   ########.fr       */
+/*   Updated: 2026/09/24 17:20:50 by dbobrov          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,41 +14,18 @@
 #include "priority_queue.h"
 #include "utils.h"
 
-static void	get_dongle_order(t_coder *coder, t_dongle **first,
-		t_dongle **second)
-{
-	if (coder->left_idx <= coder->right_idx)
-	{
-		*first = coder->left;
-		*second = coder->right;
-	}
-	else
-	{
-		*first = coder->right;
-		*second = coder->left;
-	}
-}
-
 void	release_two_dongles(t_coder *coder, t_simulation *sim)
 {
 	(void)sim;
-	release_dongle(coder->left);
-	release_dongle(coder->right);
+	release_dongle(coder->left, sim);
+	release_dongle(coder->right, sim);
 }
 
 static int	compile_cycle(t_coder *coder, t_simulation *sim)
 {
-	t_dongle	*first;
-	t_dongle	*second;
-
-	get_dongle_order(coder, &first, &second);
-	acquire_dongle(coder, sim, first);
-	if (!is_running(sim))
+	if (!take_two_dongles(coder, sim))
 		return (0);
 	log_message(sim, coder->id, "has taken a dongle");
-	acquire_dongle(coder, sim, second);
-	if (!is_running(sim))
-		return (0);
 	log_message(sim, coder->id, "has taken a dongle");
 	pthread_mutex_lock(&coder->mutex);
 	coder->last_compile_start = get_time_ms();
@@ -70,7 +47,7 @@ static void	handle_single_coder(t_coder *coder, t_simulation *sim)
 	log_message(sim, coder->id, "has taken a dongle");
 	while (is_running(sim))
 		ft_usleep(1000, sim);
-	release_dongle(coder->left);
+	release_dongle(coder->left, sim);
 }
 
 void	*coder_thread(void *arg)

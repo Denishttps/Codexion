@@ -20,6 +20,7 @@ SRCS		= \
 				simulation_init.c \
 				coder.c \
 				coder_utils.c \
+				coder_wait.c \
 				monitor.c \
 				utils.c \
 				priority_queue.c \

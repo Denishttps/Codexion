@@ -6,7 +6,7 @@
 /*   By: dbobrov <dbobrov@student.42wolfsburg.de    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/08/11 12:00:00 by dbobrov           #+#    #+#             */
-/*   Updated: 2026/09/22 12:40:43 by dbobrov          ###   ########.fr       */
+/*   Updated: 2026/09/24 17:21:26 by dbobrov          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,10 +14,10 @@
 
 long long	get_time_ms(void)
 {
-	struct timeval	tv;
+	struct timespec	ts;
 
-	gettimeofday(&tv, NULL);
-	return ((tv.tv_sec * 1000LL) + (tv.tv_usec / 1000LL));
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return ((ts.tv_sec * 1000LL) + (ts.tv_nsec / 1000000LL));
 }
 
 bool	is_running(t_simulation *sim)
@@ -43,19 +43,15 @@ void	ft_usleep(int ms, t_simulation *sim)
 	}
 }
 
-void log_message(t_simulation *sim, int coder_id, const char *msg)
+void	log_message(t_simulation *sim, int coder_id, const char *msg)
 {
-    long long timestamp;
+	long long	timestamp;
 
-    // Проверяем running ДО захвата log_mutex — порядок: simulation_mutex, потом log_mutex
-    if (!is_running(sim))
-        return ;
-    pthread_mutex_lock(&sim->log_mutex);
-    // Перепроверяем внутри — между проверкой и lock мог прийти burnout
-    if (sim->running)
-    {
-        timestamp = get_time_ms() - sim->start_time;
-        printf("%lld %d %s\n", timestamp, coder_id, msg);
-    }
-    pthread_mutex_unlock(&sim->log_mutex);
+	pthread_mutex_lock(&sim->log_mutex);
+	if (is_running(sim))
+	{
+		timestamp = get_time_ms() - sim->start_time;
+		printf("%lld %d %s\n", timestamp, coder_id, msg);
+	}
+	pthread_mutex_unlock(&sim->log_mutex);
 }

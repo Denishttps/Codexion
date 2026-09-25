@@ -64,6 +64,9 @@ int	init_mutexes(t_simulation *sim)
 	pthread_mutex_init(&sim->log_mutex, NULL);
 	pthread_mutex_init(&sim->simulation_mutex, NULL);
 	pthread_mutex_init(&sim->counter_mutex, NULL);
+	pthread_mutex_init(&sim->pair_mutex, NULL);
+	pthread_cond_init(&sim->pair_cond, NULL);
+	wait_heap_init(&sim->pair_heap, sim->config.coder_count);
 	sim->request_counter = 0;
 	sim->running = false;
 	return (1);

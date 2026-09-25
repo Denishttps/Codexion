@@ -3,12 +3,13 @@
 /*                                                        :::      ::::::::   */
 /*   codexion.h                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dbobrov <dbobrov@student.42wolfsburg.de>   +#+  +:+       +#+        */
+/*   By: dbobrov <dbobrov@student.42wolfsburg.de    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/08/11 12:00:00 by dbobrov           #+#    #+#             */
-/*   Updated: 2026/08/11 12:00:00 by dbobrov          ###   ########.fr       */
+/*   Updated: 2026/09/25 14:04:15 by dbobrov          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
+
 #ifndef CODEXION_H
 # define CODEXION_H
 
@@ -99,6 +100,9 @@ typedef struct s_simulation
 	long long				request_counter;
 	pthread_mutex_t			counter_mutex;
 
+	pthread_mutex_t			pair_mutex;
+	pthread_cond_t			pair_cond;
+	t_wait_heap				pair_heap;
 	int						burnout_coder_id;
 }							t_simulation;
 
