@@ -6,7 +6,7 @@
 /*   By: dbobrov <dbobrov@student.42wolfsburg.de    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/08/11 12:00:00 by dbobrov           #+#    #+#             */
-/*   Updated: 2026/09/24 17:19:12 by dbobrov          ###   ########.fr       */
+/*   Updated: 2026/09/25 14:04:15 by dbobrov          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -22,7 +22,7 @@ int			wait_heap_compare(const t_request *a, const t_request *b,
 int			wait_heap_push(t_wait_heap *heap, t_request req,
 				const t_config *config);
 int			wait_heap_remove(t_wait_heap *heap, int coder_id,
-					const t_config *config);
+				const t_config *config);
 t_request	wait_heap_pop(t_wait_heap *heap, const t_config *config);
 t_request	wait_heap_peek(t_wait_heap *heap);
 void		swap_nodes(t_wait_heap *heap, int a, int b);

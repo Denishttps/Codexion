@@ -6,7 +6,7 @@
 /*   By: dbobrov <dbobrov@student.42wolfsburg.de    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/08/11 12:00:00 by dbobrov           #+#    #+#             */
-/*   Updated: 2026/08/12 12:18:23 by dbobrov          ###   ########.fr       */
+/*   Updated: 2026/09/25 14:38:17 by dbobrov          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -55,6 +55,11 @@ void	heap_up(t_wait_heap *heap, int index, const t_config *config)
 		swap_nodes(heap, index, parent);
 		index = parent;
 	}
+}
+
+t_request	wait_heap_peek(t_wait_heap *heap)
+{
+	return (heap->items[0]);
 }
 
 void	heap_down(t_wait_heap *heap, int index, const t_config *config)

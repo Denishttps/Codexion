@@ -6,7 +6,7 @@
 /*   By: dbobrov <dbobrov@student.42wolfsburg.de    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/08/11 12:00:00 by dbobrov           #+#    #+#             */
-/*   Updated: 2026/09/24 17:18:59 by dbobrov          ###   ########.fr       */
+/*   Updated: 2026/09/25 14:07:44 by dbobrov          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -72,9 +72,4 @@ t_request	wait_heap_pop(t_wait_heap *heap, const t_config *config)
 		heap_down(heap, 0, config);
 	}
 	return (req);
-}
-
-t_request	wait_heap_peek(t_wait_heap *heap)
-{
-	return (heap->items[0]);
 }
