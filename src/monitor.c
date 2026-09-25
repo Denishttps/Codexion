@@ -6,22 +6,26 @@
 /*   By: dbobrov <dbobrov@student.42wolfsburg.de    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/08/11 12:00:00 by dbobrov           #+#    #+#             */
-/*   Updated: 2026/08/12 12:18:17 by dbobrov          ###   ########.fr       */
+/*   Updated: 2026/09/22 12:40:12 by dbobrov          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "simulation.h"
 #include "utils.h"
 
-static void	handle_burnout(t_simulation *sim, int idx, long long now)
+static void handle_burnout(t_simulation *sim, int idx, long long now)
 {
-	pthread_mutex_lock(&sim->log_mutex);
-	printf("%lld %d burned out\n", now - sim->start_time, sim->coders[idx].id);
-	pthread_mutex_lock(&sim->simulation_mutex);
-	sim->running = false;
-	pthread_mutex_unlock(&sim->simulation_mutex);
-	pthread_mutex_unlock(&sim->log_mutex);
-	wake_dongles(sim);
+    // Сначала останавливаем симуляцию — без log_mutex внутри
+    pthread_mutex_lock(&sim->simulation_mutex);
+    sim->running = false;
+    pthread_mutex_unlock(&sim->simulation_mutex);
+
+    // Потом логируем — log_mutex никогда не вкладывает simulation_mutex
+    pthread_mutex_lock(&sim->log_mutex);
+    printf("%lld %d burned out\n", now - sim->start_time, sim->coders[idx].id);
+    pthread_mutex_unlock(&sim->log_mutex);
+
+    wake_dongles(sim);
 }
 
 static void	check_burnout(t_simulation *sim)

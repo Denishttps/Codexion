@@ -6,7 +6,7 @@
 /*   By: dbobrov <dbobrov@student.42wolfsburg.de    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/08/11 12:00:00 by dbobrov           #+#    #+#             */
-/*   Updated: 2026/08/12 12:17:58 by dbobrov          ###   ########.fr       */
+/*   Updated: 2026/09/22 12:47:08 by dbobrov          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -56,17 +56,21 @@ void	wait_cooldown(t_dongle *dongle, t_simulation *sim)
 
 void	acquire_dongle(t_coder *coder, t_simulation *sim, t_dongle *dongle)
 {
-	t_request	req;
+	t_request   req;
+    long long   deadline_snapshot;
 
-	req.coder_id = coder->id;
-	pthread_mutex_lock(&coder->mutex);
-	req.deadline = coder->last_compile_start + sim->config.time_to_burnout;
-	pthread_mutex_unlock(&coder->mutex);
-	pthread_mutex_lock(&sim->counter_mutex);
-	req.arrival_order = sim->request_counter++;
-	pthread_mutex_unlock(&sim->counter_mutex);
-	pthread_mutex_lock(&dongle->mutex);
-	wait_heap_push(&dongle->wait_heap, req, &sim->config);
+    pthread_mutex_lock(&coder->mutex);
+    deadline_snapshot = coder->last_compile_start + sim->config.time_to_burnout;
+    pthread_mutex_unlock(&coder->mutex);
+
+    pthread_mutex_lock(&sim->counter_mutex);
+    req.arrival_order = sim->request_counter++;
+    pthread_mutex_unlock(&sim->counter_mutex);
+
+    pthread_mutex_lock(&dongle->mutex);
+    req.coder_id = coder->id;
+    req.deadline = deadline_snapshot;
+    wait_heap_push(&dongle->wait_heap, req, &sim->config);
 	while (is_running(sim) && (!can_take(dongle, coder->id)
 			|| !cooldown_ok(dongle, sim)))
 	{
